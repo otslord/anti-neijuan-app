@@ -7,7 +7,7 @@
   <style>
     :root{--bg:#0f1226;--card:#171c39;--line:#2a3568;--text:#e9eeff;--muted:#a9b3da;--acc:#69b3ff;--ok:#39d98a;--warn:#ffb84d;--bad:#ff6b6b}
     *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(1200px 600px at 10% 0%,#1a2250,#0f1226);color:var(--text)}
-    .wrap{max-width:900px;margin:0 auto;padding:20px}
+    .wrap{max-width:980px;margin:0 auto;padding:20px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
     h1{margin:4px 0 6px} p{color:var(--muted)}
     textarea{width:100%;min-height:92px;background:#0f1430;border:1px solid #34427e;color:var(--text);border-radius:12px;padding:12px;font-size:15px}
@@ -20,24 +20,40 @@
     .lv.low{background:#173b2a;color:#8ff0be}.lv.mid{background:#4b3b14;color:#ffd58a}.lv.high{background:#5a1f24;color:#ff9da3}
     .chips span{display:inline-block;margin:4px 6px 0 0;padding:3px 8px;border-radius:999px;background:#1e2a59;color:#b8c8ff;font-size:12px}
     .footer{margin-top:12px;font-size:12px;color:#8f9ccc}
+    .layout{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+    .rank{margin-top:14px;padding:14px;border:1px solid #3752a0;border-radius:12px;background:#10173a}
+    .rank h3{margin:0 0 10px}
+    .rank ol{margin:0;padding-left:20px}
+    .rank li{margin:7px 0;color:#c8d5ff}
+    .pill{font-size:12px;color:#8fb6ff;border:1px solid #35519a;border-radius:999px;padding:1px 7px;margin-left:6px}
+    .empty{color:#90a0d4}
+    @media (max-width:900px){.layout{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>卷王翻译器 🌀</h1>
-      <p>输入同事话术，自动输出：真实翻译 + 卷度评分 + 搞笑应对策略。</p>
-      <div class="chips"><span>职场黑话翻译</span><span>卷度检测</span><span>一键复制</span></div>
+    <div class="layout">
+      <div class="card">
+        <h1>卷王翻译器 🌀</h1>
+        <p>输入同事话术，自动输出：真实翻译 + 卷度评分 + 搞笑应对策略。</p>
+        <div class="chips"><span>职场黑话翻译</span><span>卷度检测</span><span>一键复制</span><span>今日最卷榜</span></div>
 
-      <textarea id="input" placeholder="例：这个需求很简单，你今晚顺手改一下就行"></textarea>
-      <div class="row">
-        <button class="primary" id="analyze">开始翻译</button>
-        <button id="random">来一句随机卷话</button>
-        <button id="copy">复制结果</button>
+        <textarea id="input" placeholder="例：这个需求很简单，你今晚顺手改一下就行"></textarea>
+        <div class="row">
+          <button class="primary" id="analyze">开始翻译</button>
+          <button id="random">来一句随机卷话</button>
+          <button id="copy">复制结果</button>
+          <button id="clearRank">清空排行榜</button>
+        </div>
+
+        <div class="out" id="out">等你输入一句“高能职场黑话”...</div>
+        <div class="footer">仅供娱乐，不构成劳动关系法律建议 😄</div>
       </div>
 
-      <div class="out" id="out">等你输入一句“高能职场黑话”...</div>
-      <div class="footer">仅供娱乐，不构成劳动关系法律建议 😄</div>
+      <div class="card rank">
+        <h3>🏆 今日最卷金句 TOP 10</h3>
+        <ol id="rankList"></ol>
+      </div>
     </div>
   </div>
 
@@ -59,6 +75,8 @@
       {kw:['不急','先做'], add:2, truth:'“不急”但“先做”≈需求优先级口头矛盾。', reply:'明白，我会按优先级池排队，先补齐验收标准。'},
       {kw:['辛苦','坚持'], add:2, truth:'情绪鼓励可能在掩盖资源不足。', reply:'可以推进，但需要明确范围，不然质量和节奏都受影响。'}
     ];
+
+    const key = 'anti-neijuan-rank-v1';
 
     function analyze(text){
       let score = 1;
@@ -84,6 +102,49 @@
       return {score, lv, lvText, truth, reply, hits:[...new Set(hits)]};
     }
 
+    function getRank(){
+      try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+      catch { return []; }
+    }
+
+    function setRank(items){
+      localStorage.setItem(key, JSON.stringify(items));
+    }
+
+    function saveToRank(text, score){
+      const items = getRank();
+      const now = new Date();
+      const day = now.toISOString().slice(0,10);
+      const filtered = items.filter(i => i.day === day);
+
+      const existing = filtered.find(i => i.text === text);
+      if(existing){
+        existing.score = Math.max(existing.score, score);
+        existing.ts = now.getTime();
+      } else {
+        filtered.push({text, score, ts: now.getTime(), day});
+      }
+      filtered.sort((a,b)=> b.score - a.score || b.ts - a.ts);
+      const top10 = filtered.slice(0,10);
+      setRank(top10);
+      renderRank();
+    }
+
+    function renderRank(){
+      const list = document.getElementById('rankList');
+      const items = getRank().sort((a,b)=> b.score - a.score || b.ts - a.ts).slice(0,10);
+      if(!items.length){
+        list.innerHTML = '<div class="empty">还没有上榜金句，快测一句同事话术！</div>';
+        return;
+      }
+      list.innerHTML = items.map(i => `
+        <li>
+          ${i.text}
+          <span class="pill">卷度 ${i.score}/10</span>
+        </li>
+      `).join('');
+    }
+
     const input = document.getElementById('input');
     const out = document.getElementById('out');
 
@@ -98,6 +159,7 @@
         <div style="margin-top:8px"><b>建议回复：</b>${r.reply}</div>
         <div style="margin-top:8px;color:#93a3d7">命中关键词：${r.hits.length? r.hits.join('、'):'无'}</div>
       `;
+      saveToRank(text, r.score);
     };
 
     document.getElementById('random').onclick = ()=>{
@@ -111,6 +173,14 @@
       try{ await navigator.clipboard.writeText(text); alert('已复制结果'); }
       catch{ alert('复制失败，请手动复制'); }
     };
+
+    document.getElementById('clearRank').onclick = ()=>{
+      if(!confirm('确定清空今日最卷榜吗？')) return;
+      localStorage.removeItem(key);
+      renderRank();
+    };
+
+    renderRank();
   </script>
 </body>
 </html>
