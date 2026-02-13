@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>卷王翻译器｜反内卷实验室</title>
+  <style>
+    :root{--bg:#0f1226;--card:#171c39;--line:#2a3568;--text:#e9eeff;--muted:#a9b3da;--acc:#69b3ff;--ok:#39d98a;--warn:#ffb84d;--bad:#ff6b6b}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(1200px 600px at 10% 0%,#1a2250,#0f1226);color:var(--text)}
+    .wrap{max-width:900px;margin:0 auto;padding:20px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+    h1{margin:4px 0 6px} p{color:var(--muted)}
+    textarea{width:100%;min-height:92px;background:#0f1430;border:1px solid #34427e;color:var(--text);border-radius:12px;padding:12px;font-size:15px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button{border:1px solid #3d4f96;background:#1b2551;color:#dfe7ff;padding:10px 14px;border-radius:10px;cursor:pointer}
+    button.primary{background:#2463d6;border-color:#2c6ce0}
+    .out{margin-top:14px;padding:14px;border:1px dashed #4462b3;border-radius:12px;background:#10173a}
+    .score{font-weight:700}
+    .lv{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:6px}
+    .lv.low{background:#173b2a;color:#8ff0be}.lv.mid{background:#4b3b14;color:#ffd58a}.lv.high{background:#5a1f24;color:#ff9da3}
+    .chips span{display:inline-block;margin:4px 6px 0 0;padding:3px 8px;border-radius:999px;background:#1e2a59;color:#b8c8ff;font-size:12px}
+    .footer{margin-top:12px;font-size:12px;color:#8f9ccc}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>卷王翻译器 🌀</h1>
+      <p>输入同事话术，自动输出：真实翻译 + 卷度评分 + 搞笑应对策略。</p>
+      <div class="chips"><span>职场黑话翻译</span><span>卷度检测</span><span>一键复制</span></div>
+
+      <textarea id="input" placeholder="例：这个需求很简单，你今晚顺手改一下就行"></textarea>
+      <div class="row">
+        <button class="primary" id="analyze">开始翻译</button>
+        <button id="random">来一句随机卷话</button>
+        <button id="copy">复制结果</button>
+      </div>
+
+      <div class="out" id="out">等你输入一句“高能职场黑话”...</div>
+      <div class="footer">仅供娱乐，不构成劳动关系法律建议 😄</div>
+    </div>
+  </div>
+
+  <script>
+    const examples = [
+      '这个需求很简单，你今晚顺手改一下就行',
+      '先对齐一下，半小时就好',
+      '你方便的时候看下，今天最好给我',
+      '周末别闲着，我们冲一下版本',
+      '这个先不急，但你先做出来给我看看',
+      '大家都很辛苦，再坚持一下'
+    ];
+
+    const rules = [
+      {kw:['简单','顺手','一下'], add:3, truth:'“简单”≈隐藏复杂度；“顺手”≈默认加班。', reply:'收到，我先排期评估，预计明天给你明确时间。'},
+      {kw:['对齐','同步','开个会'], add:2, truth:'“对齐”≈会议可能比需求还长。', reply:'可以，先异步写清目标和输入，减少无效会。'},
+      {kw:['方便','有空','最好今天'], add:3, truth:'“方便时”≈“现在”；“最好今天”≈“必须今天”。', reply:'我这边有在排任务，给你两个可交付时间点选一个。'},
+      {kw:['周末','冲','加班'], add:4, truth:'“冲一下”≈拿休息时间换短期产出。', reply:'周末我不在线，周一优先处理并同步进度。'},
+      {kw:['不急','先做'], add:2, truth:'“不急”但“先做”≈需求优先级口头矛盾。', reply:'明白，我会按优先级池排队，先补齐验收标准。'},
+      {kw:['辛苦','坚持'], add:2, truth:'情绪鼓励可能在掩盖资源不足。', reply:'可以推进，但需要明确范围，不然质量和节奏都受影响。'}
+    ];
+
+    function analyze(text){
+      let score = 1;
+      const hits = [];
+      const truths = [];
+      const replies = [];
+      for(const r of rules){
+        if(r.kw.some(k => text.includes(k))){
+          score += r.add;
+          hits.push(...r.kw.filter(k=>text.includes(k)));
+          truths.push(r.truth);
+          replies.push(r.reply);
+        }
+      }
+      score = Math.min(10, score);
+      let lv='low', lvText='低卷';
+      if(score>=7){lv='high';lvText='高卷警报';}
+      else if(score>=4){lv='mid';lvText='中度内卷';}
+
+      const truth = truths[0] || '这句话卷度不高，可能只是正常协作。';
+      const reply = replies[0] || '收到，我按优先级处理并同步进度。';
+
+      return {score, lv, lvText, truth, reply, hits:[...new Set(hits)]};
+    }
+
+    const input = document.getElementById('input');
+    const out = document.getElementById('out');
+
+    document.getElementById('analyze').onclick = ()=>{
+      const text = input.value.trim();
+      if(!text){ out.textContent='先输入一句同事话术～'; return; }
+      const r = analyze(text);
+      out.innerHTML = `
+        <div><b>原话：</b>${text}</div>
+        <div style="margin-top:8px"><b>真实翻译：</b>${r.truth}</div>
+        <div style="margin-top:8px"><span class="score">卷度：${r.score}/10</span> <span class="lv ${r.lv}">${r.lvText}</span></div>
+        <div style="margin-top:8px"><b>建议回复：</b>${r.reply}</div>
+        <div style="margin-top:8px;color:#93a3d7">命中关键词：${r.hits.length? r.hits.join('、'):'无'}</div>
+      `;
+    };
+
+    document.getElementById('random').onclick = ()=>{
+      input.value = examples[Math.floor(Math.random()*examples.length)];
+      document.getElementById('analyze').click();
+    };
+
+    document.getElementById('copy').onclick = async ()=>{
+      const text = out.innerText.trim();
+      if(!text || text.includes('等你输入')) return;
+      try{ await navigator.clipboard.writeText(text); alert('已复制结果'); }
+      catch{ alert('复制失败，请手动复制'); }
+    };
+  </script>
+</body>
+</html>
